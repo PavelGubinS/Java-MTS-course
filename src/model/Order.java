@@ -74,7 +74,6 @@ public class Order {
             return;
         }
 
-        // Классический синтаксис switch, совместимый с Java 8
         switch (newStatus) {
             case IN_TRANSIT:
                 if (status == OrderStatus.COURIER_ASSIGNED ||
