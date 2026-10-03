@@ -22,7 +22,6 @@ public class ConsoleInterface {
 
             String input = scanner.nextLine();
             try {
-                // Классический синтаксис switch для Java 8
                 switch (input) {
                     case "1":
                         createOrder();
