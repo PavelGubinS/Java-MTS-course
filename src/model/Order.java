@@ -41,6 +41,10 @@ public class Order {
         return cost;
     }
 
+    public List<OrderItem> getItems() {
+        return items;
+    }
+
     public void setDeliveryMethod(DeliveryMethod method) {
         if (status == OrderStatus.CREATED || status == OrderStatus.DELIVERY_METHOD_CHOSEN) {
             this.deliveryMethod = method;
@@ -51,14 +55,24 @@ public class Order {
     }
 
     public void assignCourier(Courier courier) {
+        if (status == OrderStatus.CANCELLED || status == OrderStatus.DELIVERED) {
+            throw new IllegalStateException("Нельзя назначить курьера на завершенный или отмененный заказ!");
+        }
         if (deliveryMethod == null) {
             throw new IllegalStateException("Сначала выберите способ доставки!");
         }
         if (!deliveryMethod.requiresCourier()) {
             throw new IllegalStateException("Для самовывоза курьер не требуется!");
         }
+        if (!courier.isAvailable()) {
+            throw new IllegalStateException("Этот курьер уже занят другим заказом!");
+        }
         if (status == OrderStatus.DELIVERY_METHOD_CHOSEN || status == OrderStatus.COURIER_ASSIGNED) {
+            if (this.assignedCourier != null) {
+                this.assignedCourier.setAvailable(true);
+            }
             this.assignedCourier = courier;
+            this.assignedCourier.setAvailable(false);
             this.status = OrderStatus.COURIER_ASSIGNED;
         } else {
             throw new IllegalStateException("Невозможно назначить курьера на текущем этапе.");
@@ -66,32 +80,61 @@ public class Order {
     }
 
     public void updateStatus(OrderStatus newStatus) {
+        // Защита №1: Если заказ уже отменен или доставлен, его статус изменять нельзя вообще
+        if (this.status == OrderStatus.CANCELLED) {
+            throw new IllegalStateException("Ошибка: Нельзя изменить статус! Этот заказ уже БЫЛ ОТМЕНЕН ранее.");
+        }
+        if (this.status == OrderStatus.DELIVERED) {
+            throw new IllegalStateException("Ошибка: Нельзя изменить статус! Этот заказ уже БЫЛ ДОСТАВЛЕН.");
+        }
+
+        // Защита №2: Переход в статус CANCELLED из рабочих статусов
         if (newStatus == OrderStatus.CANCELLED) {
-            if (status == OrderStatus.DELIVERED) {
-                throw new IllegalArgumentException("Нельзя отменить уже доставленный заказ.");
+            if (this.assignedCourier != null) {
+                this.assignedCourier.setAvailable(true);
             }
+            animateStatusTransition(this.status, newStatus);
             this.status = newStatus;
             return;
         }
 
+        // Защита №3: Строгие переходы по линейной цепочке
         switch (newStatus) {
             case IN_TRANSIT:
                 if (status == OrderStatus.COURIER_ASSIGNED ||
                         (status == OrderStatus.DELIVERY_METHOD_CHOSEN && !deliveryMethod.requiresCourier())) {
+                    animateStatusTransition(this.status, newStatus);
                     this.status = newStatus;
                 } else {
-                    throw new IllegalArgumentException("Перед отправкой необходимо назначить курьера!");
+                    throw new IllegalArgumentException("Ошибка перехода: Перед отправкой необходимо назначить курьера (или выбрать самовывоз)!");
                 }
                 break;
             case DELIVERED:
                 if (status == OrderStatus.IN_TRANSIT) {
+                    animateStatusTransition(this.status, newStatus);
                     this.status = newStatus;
+                    if (this.assignedCourier != null) {
+                        this.assignedCourier.setAvailable(true);
+                    }
                 } else {
-                    throw new IllegalArgumentException("Нельзя завершить доставку заказа, который еще не отправлен.");
+                    throw new IllegalArgumentException("Ошибка перехода: Нельзя завершить доставку заказа, который еще не отправлен в путь (IN_TRANSIT)!");
                 }
                 break;
             default:
                 throw new IllegalArgumentException("Неверный или нелинейный переход статуса.");
+        }
+    }
+
+    private void animateStatusTransition(OrderStatus from, OrderStatus to) {
+        System.out.print("\nИзменение статуса [" + from + " -> " + to + "]: ");
+        try {
+            for (int i = 0; i < 10; i++) {
+                Thread.sleep(150);
+                System.out.print("■");
+            }
+            System.out.println(" Успешно!\n");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -105,6 +148,10 @@ public class Order {
 
     public DeliveryMethod getDeliveryMethod() {
         return deliveryMethod;
+    }
+
+    public Courier getAssignedCourier() {
+        return assignedCourier;
     }
 
     @Override

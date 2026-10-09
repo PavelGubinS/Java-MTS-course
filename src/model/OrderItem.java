@@ -11,6 +11,18 @@ public class OrderItem {
         this.price = price;
     }
 
+    public String getProductName() {
+        return productName;
+    }
+
+    public int getQuantity() {
+        return quantity;
+    }
+
+    public double getPrice() {
+        return price;
+    }
+
     public double getTotalPrice() {
         return price * quantity;
     }

@@ -4,6 +4,7 @@ import delivery.*;
 import model.*;
 import service.OrderService;
 import java.util.Scanner;
+import java.util.List;
 
 public class ConsoleInterface {
     private final OrderService orderService = new OrderService();
@@ -54,8 +55,14 @@ public class ConsoleInterface {
     private void createOrder() {
         System.out.print("Enter client name: ");
         String name = scanner.nextLine().trim();
-        System.out.print("Enter client phone: ");
+
+        System.out.print("Enter client phone (РФ/КЗ: +7..., РБ: +375...): ");
         String phone = scanner.nextLine().trim();
+        if (!Client.isValidPhone(phone)) {
+            System.out.println("Cancelled: Invalid phone format. Need correct CIS code and digit count.");
+            return;
+        }
+
         System.out.print("Enter delivery address: ");
         String address = scanner.nextLine().trim();
 
@@ -64,48 +71,49 @@ public class ConsoleInterface {
             return;
         }
 
-        System.out.print("Enter product name: ");
-        String item = scanner.nextLine().trim();
-        if (item.isEmpty()) {
-            System.out.println("Cancelled: Cannot create order without product.");
+        System.out.println("\nAvailable Products in Warehouse:");
+        List<Product> products = orderService.getWarehouse();
+        for (int i = 0; i < products.size(); i++) {
+            System.out.println((i + 1) + ". " + products.get(i));
+        }
+        System.out.print("Select product number: ");
+        int prodChoice;
+        try {
+            prodChoice = Integer.parseInt(scanner.nextLine().trim()) - 1;
+            if (prodChoice < 0 || prodChoice >= products.size()) {
+                System.out.println("Cancelled: Invalid product selection.");
+                return;
+            }
+        } catch (NumberFormatException e) {
+            System.out.println("Cancelled: Invalid input.");
             return;
         }
 
-        int qty = 0;
-        while (true) {
-            System.out.print("Enter quantity (integer): ");
-            try {
-                qty = Integer.parseInt(scanner.nextLine().trim());
-                if (qty <= 0) {
-                    System.out.println("Quantity must be greater than 0.");
-                    continue;
-                }
-                break;
-            } catch (NumberFormatException e) {
-                System.out.println("Error: Enter a valid integer.");
+        Product selectedProduct = products.get(prodChoice);
+
+        System.out.print("Enter quantity (integer): ");
+        int qty;
+        try {
+            qty = Integer.parseInt(scanner.nextLine().trim());
+            if (qty <= 0) {
+                System.out.println("Quantity must be greater than 0.");
+                return;
             }
+        } catch (NumberFormatException e) {
+            System.out.println("Cancelled: Enter a valid integer.");
+            return;
         }
 
-        double price = 0.0;
-        while (true) {
-            System.out.print("Enter price per unit: ");
-            try {
-                price = Double.parseDouble(scanner.nextLine().trim());
-                if (price < 0) {
-                    System.out.println("Price cannot be negative.");
-                    continue;
-                }
-                break;
-            } catch (NumberFormatException e) {
-                System.out.println("Error: Enter a valid number for price.");
-            }
+        if (!selectedProduct.decreaseQuantity(qty)) {
+            System.out.println(
+                    "Cancelled: Not enough stock! Only " + selectedProduct.getAvailableQuantity() + " items left.");
+            return;
         }
 
         Client client = new Client(name, phone);
         Order order = new Order(orderService.getNextId(), client, address);
-        order.addItem(new OrderItem(item, qty, price));
+        order.addItem(new OrderItem(selectedProduct.getName(), qty, selectedProduct.getPrice()));
 
-        // Сохранение заказа в список
         orderService.registerOrder(order);
         System.out.println("Success: Order #" + order.getId() + " created successfully.");
     }
@@ -125,13 +133,13 @@ public class ConsoleInterface {
             return;
 
         System.out.println("Available delivery methods:");
-        System.out.println("1. Standard courier delivery (150 rub)");
-        System.out.println("2. Express delivery (350 rub)");
+        System.out.println("1. Standard courier delivery");
+        System.out.println("2. Express delivery");
         System.out.println("3. Pickup (0 rub)");
         System.out.print("Your choice: ");
         String choice = scanner.nextLine().trim();
 
-        DeliveryMethod method = null;
+        DeliveryMethod method;
         switch (choice) {
             case "1":
                 method = new StandardDelivery();
@@ -155,13 +163,25 @@ public class ConsoleInterface {
         if (order == null)
             return;
 
-        System.out.print("Enter courier name: ");
-        String name = scanner.nextLine().trim();
-        System.out.print("Enter courier phone: ");
-        String phone = scanner.nextLine().trim();
+        System.out.println("\nAvailable Couriers:");
+        List<Courier> couriers = orderService.getCouriers();
+        for (int i = 0; i < couriers.size(); i++) {
+            System.out.println((i + 1) + ". " + couriers.get(i));
+        }
 
-        order.assignCourier(new Courier(name, phone));
-        System.out.println("Courier assigned to order #" + order.getId());
+        System.out.print("Select courier number: ");
+        try {
+            int courierChoice = Integer.parseInt(scanner.nextLine().trim()) - 1;
+            if (courierChoice < 0 || courierChoice >= couriers.size()) {
+                System.out.println("Error: Invalid choice.");
+                return;
+            }
+            Courier courier = couriers.get(courierChoice);
+            order.assignCourier(courier);
+            System.out.println("Courier " + courier.getName() + " assigned to order #" + order.getId());
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
     }
 
     private void changeStatus() {
@@ -176,7 +196,7 @@ public class ConsoleInterface {
         System.out.print("Your choice: ");
         String choice = scanner.nextLine().trim();
 
-        OrderStatus nextStatus = null;
+        OrderStatus nextStatus;
         switch (choice) {
             case "1":
                 nextStatus = OrderStatus.IN_TRANSIT;
@@ -189,6 +209,17 @@ public class ConsoleInterface {
                 break;
             default:
                 throw new IllegalArgumentException("Invalid status choice.");
+        }
+
+        if (nextStatus == OrderStatus.CANCELLED && order.getStatus() != OrderStatus.DELIVERED
+                && order.getStatus() != OrderStatus.CANCELLED) {
+            for (OrderItem item : order.getItems()) {
+                orderService.getWarehouse().stream()
+                        .filter(p -> p.getName().equalsIgnoreCase(item.getProductName()))
+                        .findFirst()
+                        .ifPresent(p -> p.increaseQuantity(item.getQuantity()));
+            }
+            System.out.println("Товары из заказа успешно возвращены на склад.");
         }
 
         order.updateStatus(nextStatus);

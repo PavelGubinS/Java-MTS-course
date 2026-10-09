@@ -10,3 +10,5 @@ public interface DeliveryMethod {
 
     String getName();
 }
+
+// Использовать base cost нужно в расчётах
