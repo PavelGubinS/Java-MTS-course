@@ -19,10 +19,6 @@ public class OrderItem {
         return quantity;
     }
 
-    public double getPrice() {
-        return price;
-    }
-
     public double getTotalPrice() {
         return price * quantity;
     }

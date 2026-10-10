@@ -3,7 +3,7 @@ package model;
 public class Courier {
     private final String name;
     private final String phone;
-    private boolean isAvailable; 
+    private boolean isAvailable;
 
     public Courier(String name, String phone) {
         this.name = name;
@@ -13,10 +13,6 @@ public class Courier {
 
     public String getName() {
         return name;
-    }
-
-    public String getPhone() {
-        return phone;
     }
 
     public boolean isAvailable() {

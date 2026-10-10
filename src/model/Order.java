@@ -21,16 +21,95 @@ public class Order {
         this.status = OrderStatus.CREATED;
     }
 
-    public void addItem(OrderItem item) {
-        if (status == OrderStatus.CREATED) {
-            items.add(item);
-        } else {
-            throw new IllegalStateException("Нельзя добавлять товары. Заказ уже оформлен.");
+    public boolean addItem(OrderItem item) {
+        if (status != OrderStatus.CREATED) {
+            return false;
         }
+        items.add(item);
+        return true;
+    }
+
+    public boolean setDeliveryMethod(DeliveryMethod method) {
+        if (status != OrderStatus.CREATED && status != OrderStatus.DELIVERY_METHOD_CHOSEN) {
+            return false;
+        }
+        this.deliveryMethod = method;
+        this.status = OrderStatus.DELIVERY_METHOD_CHOSEN;
+        return true;
+    }
+
+    public String assignCourier(Courier courier) {
+        if (status == OrderStatus.CANCELLED || status == OrderStatus.DELIVERED) {
+            return "Нельзя назначить курьера на завершённый или отменённый заказ";
+        }
+        if (deliveryMethod == null) {
+            return "Сначала выберите способ доставки";
+        }
+        if (!deliveryMethod.requiresCourier()) {
+            return "Для самовывоза курьер не требуется";
+        }
+        if (!courier.isAvailable()) {
+            return "Этот курьер уже занят другим заказом";
+        }
+        if (status != OrderStatus.DELIVERY_METHOD_CHOSEN && status != OrderStatus.COURIER_ASSIGNED) {
+            return "Невозможно назначить курьера на текущем этапе";
+        }
+
+        if (this.assignedCourier != null) {
+            this.assignedCourier.setAvailable(true);
+        }
+        this.assignedCourier = courier;
+        this.assignedCourier.setAvailable(false);
+        this.status = OrderStatus.COURIER_ASSIGNED;
+        return null;
+    }
+
+    public String updateStatus(OrderStatus newStatus) {
+        if (this.status == OrderStatus.CANCELLED) {
+            return "Заказ уже отменён";
+        }
+        if (this.status == OrderStatus.DELIVERED) {
+            return "Заказ уже доставлен";
+        }
+
+        if (newStatus == OrderStatus.CANCELLED) {
+            if (this.assignedCourier != null) {
+                this.assignedCourier.setAvailable(true);
+            }
+            this.status = newStatus;
+            return null;
+        }
+
+        if (newStatus == OrderStatus.IN_TRANSIT) {
+            boolean canGo = (status == OrderStatus.COURIER_ASSIGNED)
+                    || (status == OrderStatus.DELIVERY_METHOD_CHOSEN && !deliveryMethod.requiresCourier());
+            if (!canGo) {
+                return "Перед отправкой нужно назначить курьера (или выбрать самовывоз)";
+            }
+            this.status = newStatus;
+            return null;
+        }
+
+        if (newStatus == OrderStatus.DELIVERED) {
+            if (status != OrderStatus.IN_TRANSIT) {
+                return "Нельзя завершить заказ, который ещё не в пути";
+            }
+            this.status = newStatus;
+            if (this.assignedCourier != null) {
+                this.assignedCourier.setAvailable(true);
+            }
+            return null;
+        }
+
+        return "Неверный переход статуса";
     }
 
     public double getBaseCost() {
-        return items.stream().mapToDouble(OrderItem::getTotalPrice).sum();
+        double total = 0;
+        for (OrderItem item : items) {
+            total += item.getTotalPrice();
+        }
+        return total;
     }
 
     public double getTotalCost() {
@@ -41,126 +120,38 @@ public class Order {
         return cost;
     }
 
-    public List<OrderItem> getItems() {
-        return items;
-    }
-
-    public void setDeliveryMethod(DeliveryMethod method) {
-        if (status == OrderStatus.CREATED || status == OrderStatus.DELIVERY_METHOD_CHOSEN) {
-            this.deliveryMethod = method;
-            this.status = OrderStatus.DELIVERY_METHOD_CHOSEN;
-        } else {
-            throw new IllegalStateException("Нельзя изменить способ доставки на текущем этапе.");
-        }
-    }
-
-    public void assignCourier(Courier courier) {
-        if (status == OrderStatus.CANCELLED || status == OrderStatus.DELIVERED) {
-            throw new IllegalStateException("Нельзя назначить курьера на завершенный или отмененный заказ!");
-        }
-        if (deliveryMethod == null) {
-            throw new IllegalStateException("Сначала выберите способ доставки!");
-        }
-        if (!deliveryMethod.requiresCourier()) {
-            throw new IllegalStateException("Для самовывоза курьер не требуется!");
-        }
-        if (!courier.isAvailable()) {
-            throw new IllegalStateException("Этот курьер уже занят другим заказом!");
-        }
-        if (status == OrderStatus.DELIVERY_METHOD_CHOSEN || status == OrderStatus.COURIER_ASSIGNED) {
-            if (this.assignedCourier != null) {
-                this.assignedCourier.setAvailable(true);
-            }
-            this.assignedCourier = courier;
-            this.assignedCourier.setAvailable(false);
-            this.status = OrderStatus.COURIER_ASSIGNED;
-        } else {
-            throw new IllegalStateException("Невозможно назначить курьера на текущем этапе.");
-        }
-    }
-
-    public void updateStatus(OrderStatus newStatus) {
-        // Защита №1: Если заказ уже отменен или доставлен, его статус изменять нельзя вообще
-        if (this.status == OrderStatus.CANCELLED) {
-            throw new IllegalStateException("Ошибка: Нельзя изменить статус! Этот заказ уже БЫЛ ОТМЕНЕН ранее.");
-        }
-        if (this.status == OrderStatus.DELIVERED) {
-            throw new IllegalStateException("Ошибка: Нельзя изменить статус! Этот заказ уже БЫЛ ДОСТАВЛЕН.");
-        }
-
-        // Защита №2: Переход в статус CANCELLED из рабочих статусов
-        if (newStatus == OrderStatus.CANCELLED) {
-            if (this.assignedCourier != null) {
-                this.assignedCourier.setAvailable(true);
-            }
-            animateStatusTransition(this.status, newStatus);
-            this.status = newStatus;
-            return;
-        }
-
-        // Защита №3: Строгие переходы по линейной цепочке
-        switch (newStatus) {
-            case IN_TRANSIT:
-                if (status == OrderStatus.COURIER_ASSIGNED ||
-                        (status == OrderStatus.DELIVERY_METHOD_CHOSEN && !deliveryMethod.requiresCourier())) {
-                    animateStatusTransition(this.status, newStatus);
-                    this.status = newStatus;
-                } else {
-                    throw new IllegalArgumentException("Ошибка перехода: Перед отправкой необходимо назначить курьера (или выбрать самовывоз)!");
-                }
-                break;
-            case DELIVERED:
-                if (status == OrderStatus.IN_TRANSIT) {
-                    animateStatusTransition(this.status, newStatus);
-                    this.status = newStatus;
-                    if (this.assignedCourier != null) {
-                        this.assignedCourier.setAvailable(true);
-                    }
-                } else {
-                    throw new IllegalArgumentException("Ошибка перехода: Нельзя завершить доставку заказа, который еще не отправлен в путь (IN_TRANSIT)!");
-                }
-                break;
-            default:
-                throw new IllegalArgumentException("Неверный или нелинейный переход статуса.");
-        }
-    }
-
-    private void animateStatusTransition(OrderStatus from, OrderStatus to) {
-        System.out.print("\nИзменение статуса [" + from + " -> " + to + "]: ");
-        try {
-            for (int i = 0; i < 10; i++) {
-                Thread.sleep(150);
-                System.out.print("■");
-            }
-            System.out.println(" Успешно!\n");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
-
     public int getId() {
         return id;
+    }
+
+    public Client getClient() {
+        return client;
     }
 
     public OrderStatus getStatus() {
         return status;
     }
 
-    public DeliveryMethod getDeliveryMethod() {
-        return deliveryMethod;
-    }
-
-    public Courier getAssignedCourier() {
-        return assignedCourier;
+    public List<OrderItem> getItems() {
+        return items;
     }
 
     @Override
     public String toString() {
+        String methodName = (deliveryMethod != null) ? deliveryMethod.getName() : "Не выбран";
+        String courierName = (assignedCourier != null) ? assignedCourier.getName() : "Нет";
+        int time = (deliveryMethod != null) ? deliveryMethod.estimateDeliveryTime() : 0;
+
         return String.format(
-                "Заказ №%d [%s]\nКлиент: %s (%s) | Адрес: %s\nТовары: %s\nСпособ доставки: %s\nКурьер: %s\nСтоимость товаров: %.2f руб. | Итого (с доставкой): %.2f руб. (Срок: %d мин.)\n",
-                id, status, client.getName(), client.getPhone(), deliveryAddress, items,
-                (deliveryMethod != null ? deliveryMethod.getName() : "Не выбран"),
-                (assignedCourier != null ? assignedCourier.getName() : "Нет"),
-                getBaseCost(), getTotalCost(), (deliveryMethod != null ? deliveryMethod.estimateDeliveryTime() : 0));
+                "Заказ №%d [%s]%n" +
+                "Клиент: %s (%s) | Адрес: %s%n" +
+                "Товары: %s%n" +
+                "Способ доставки: %s%n" +
+                "Курьер: %s%n" +
+                "Стоимость товаров: %.2f руб. | Итого: %.2f руб. (Срок: %d мин.)%n",
+                id, status,
+                client.getName(), client.getPhone(), deliveryAddress,
+                items, methodName, courierName,
+                getBaseCost(), getTotalCost(), time);
     }
 }

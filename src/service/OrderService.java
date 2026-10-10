@@ -1,9 +1,12 @@
 package service;
 
-import model.*;
+import model.Courier;
+import model.Order;
+import model.OrderItem;
+import model.Product;
+
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 public class OrderService {
     private final List<Order> orders = new ArrayList<>();
@@ -42,11 +45,27 @@ public class OrderService {
         return couriers;
     }
 
-    public Optional<Order> findOrderById(int id) {
-        return orders.stream().filter(o -> o.getId() == id).findFirst();
+    public Order findOrderById(int id) {
+        for (Order order : orders) {
+            if (order.getId() == id) {
+                return order;
+            }
+        }
+        return null;
     }
 
     public int getNextId() {
         return idSequence++;
+    }
+
+    public void returnProductsToWarehouse(Order order) {
+        for (OrderItem item : order.getItems()) {
+            for (Product product : warehouse) {
+                if (product.getName().equalsIgnoreCase(item.getProductName())) {
+                    product.increaseQuantity(item.getQuantity());
+                    break;
+                }
+            }
+        }
     }
 }

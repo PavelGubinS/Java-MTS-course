@@ -11,33 +11,32 @@ public class Product {
         this.price = price;
     }
 
-    public String getName() { 
-        return name; 
+    public String getName() {
+        return name;
     }
 
-    public int getAvailableQuantity() { 
-        return availableQuantity; 
+    public int getAvailableQuantity() {
+        return availableQuantity;
     }
 
-    public double getPrice() { 
-        return price; 
+    public double getPrice() {
+        return price;
     }
 
-    public synchronized boolean decreaseQuantity(int amount) {
-        if (this.availableQuantity >= amount) {
-            this.availableQuantity -= amount;
+    public boolean decreaseQuantity(int amount) {
+        if (availableQuantity >= amount) {
+            availableQuantity -= amount;
             return true;
         }
         return false;
     }
 
-    public synchronized void increaseQuantity(int amount) {
-        this.availableQuantity += amount;
+    public void increaseQuantity(int amount) {
+        availableQuantity += amount;
     }
 
     @Override
     public String toString() {
-        // Заменили длинное тире '—' на обычный дефис '-'
         return String.format("%s - %.2f руб. (В наличии: %d шт.)", name, price, availableQuantity);
     }
 }
