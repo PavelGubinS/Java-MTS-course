@@ -57,69 +57,124 @@ public class ConsoleInterface {
         }
     }
 
+    private String readNonEmptyString(String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            String value = scanner.nextLine().trim();
+            if (!value.isEmpty()) {
+                return value;
+            }
+            System.out.println("Ошибка: поле не может быть пустым. Попробуйте снова.");
+        }
+    }
+
+    private String readValidPhone(String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            String value = scanner.nextLine().trim();
+            if (Client.isValidPhone(value)) {
+                return value;
+            }
+            System.out.println("Ошибка: неверный формат телефона (10-12 цифр, допустимы +, -, пробел, скобки).");
+        }
+    }
+
+    private int readIntInRange(String prompt, int min, int max) {
+        while (true) {
+            System.out.print(prompt);
+            String line = scanner.nextLine().trim();
+            try {
+                int value = Integer.parseInt(line);
+                if (value >= min && value <= max) {
+                    return value;
+                }
+                System.out.println("Ошибка: число должно быть в диапазоне от " + min + " до " + max + ".");
+            } catch (NumberFormatException e) {
+                System.out.println("Ошибка: введите целое число.");
+            }
+        }
+    }
+
+    private boolean askYesNo(String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            String answer = scanner.nextLine().trim();
+            if (answer.equals("1")) {
+                return true;
+            }
+            if (answer.equals("2")) {
+                return false;
+            }
+            System.out.println("Ошибка: введите 1 (да) или 2 (нет).");
+        }
+    }
+
     private void createOrder() {
-        System.out.print("Введите имя клиента: ");
-        String name = scanner.nextLine().trim();
-
-        System.out.print("Введите телефон (РФ/КЗ: +7..., РБ: +375...): ");
-        String phone = scanner.nextLine().trim();
-        if (!Client.isValidPhone(phone)) {
-            System.out.println("Отменено: неверный формат телефона.");
-            return;
-        }
-
-        System.out.print("Введите адрес доставки: ");
-        String address = scanner.nextLine().trim();
-
-        if (name.isEmpty() || address.isEmpty()) {
-            System.out.println("Отменено: имя и адрес обязательны.");
-            return;
-        }
-
-        System.out.println("\nТовары на складе:");
-        List<Product> products = orderService.getWarehouse();
-        for (int i = 0; i < products.size(); i++) {
-            System.out.println((i + 1) + ". " + products.get(i));
-        }
-        System.out.print("Выберите номер товара: ");
-
-        int prodChoice;
-        try {
-            prodChoice = Integer.parseInt(scanner.nextLine().trim()) - 1;
-        } catch (NumberFormatException e) {
-            System.out.println("Отменено: введите число.");
-            return;
-        }
-        if (prodChoice < 0 || prodChoice >= products.size()) {
-            System.out.println("Отменено: неверный номер товара.");
-            return;
-        }
-        Product selectedProduct = products.get(prodChoice);
-
-        System.out.print("Введите количество: ");
-        int qty;
-        try {
-            qty = Integer.parseInt(scanner.nextLine().trim());
-        } catch (NumberFormatException e) {
-            System.out.println("Отменено: введите целое число.");
-            return;
-        }
-        if (qty <= 0) {
-            System.out.println("Количество должно быть больше 0.");
-            return;
-        }
-
-        if (!selectedProduct.decreaseQuantity(qty)) {
-            System.out.println("Отменено: на складе только " + selectedProduct.getAvailableQuantity() + " шт.");
-            return;
-        }
+        String name = readNonEmptyString("Введите имя клиента: ");
+        String phone = readValidPhone("Введите телефон (10-12 цифр): ");
+        String address = readNonEmptyString("Введите адрес доставки: ");
 
         Client client = new Client(name, phone);
         Order order = new Order(orderService.getNextId(), client, address);
-        order.addItem(new OrderItem(selectedProduct.getName(), qty, selectedProduct.getPrice()));
-        orderService.registerOrder(order);
 
+        boolean addMore = true;
+        while (addMore) {
+            OrderItem item = readOrderItem();
+            if (item != null) {
+                order.addItem(item);
+            }
+            addMore = askYesNo("Добавить ещё позицию? (1 - да, 2 - нет): ");
+        }
+
+        if (order.getItems().isEmpty()) {
+            System.out.println("Отменено: заказ должен содержать хотя бы одну позицию.");
+            return;
+        }
+
+        orderService.registerOrder(order);
         System.out.println("Успех: заказ №" + order.getId() + " создан.");
+    }
+
+    private OrderItem readOrderItem() {
+        List<Product> products = orderService.getWarehouse();
+
+        boolean anyAvailable = false;
+        for (Product p : products) {
+            if (p.getAvailableQuantity() > 0) {
+                anyAvailable = true;
+                break;
+            }
+        }
+        if (!anyAvailable) {
+            System.out.println("На складе закончились все товары.");
+            return null;
+        }
+
+        System.out.println("\nТовары на складе:");
+        for (int i = 0; i < products.size(); i++) {
+            System.out.println((i + 1) + ". " + products.get(i));
+        }
+
+        int prodChoice = readIntInRange(
+                "Выберите номер товара (1-" + products.size() + "): ",
+                1, products.size());
+        Product selected = products.get(prodChoice - 1);
+
+        if (selected.getAvailableQuantity() == 0) {
+            System.out.println("Ошибка: этот товар отсутствует на складе.");
+            return null;
+        }
+
+        int qty = readIntInRange(
+                "Введите количество (1-" + selected.getAvailableQuantity() + "): ",
+                1, selected.getAvailableQuantity());
+
+        if (!selected.decreaseQuantity(qty)) {
+            System.out.println("Ошибка: не удалось списать товар со склада.");
+            return null;
+        }
+
+        return new OrderItem(selected.getName(), qty, selected.getPrice());
     }
 
     private void showOrders() {
@@ -144,22 +199,21 @@ public class ConsoleInterface {
         System.out.println("1. Стандартная курьером");
         System.out.println("2. Экспресс");
         System.out.println("3. Самовывоз");
-        System.out.print("Ваш выбор: ");
-        String choice = scanner.nextLine().trim();
+
+        int choice = readIntInRange("Ваш выбор: ", 1, 3);
 
         DeliveryMethod method;
         switch (choice) {
-            case "1":
+            case 1:
                 method = new StandardDelivery();
                 break;
-            case "2":
+            case 2:
                 method = new ExpressDelivery();
                 break;
-            case "3":
+            case 3:
                 method = new PickupDelivery();
                 break;
             default:
-                System.out.println("Ошибка: неверный выбор.");
                 return;
         }
 
@@ -181,21 +235,12 @@ public class ConsoleInterface {
         for (int i = 0; i < couriers.size(); i++) {
             System.out.println((i + 1) + ". " + couriers.get(i));
         }
-        System.out.print("Выберите номер курьера: ");
 
-        int courierChoice;
-        try {
-            courierChoice = Integer.parseInt(scanner.nextLine().trim()) - 1;
-        } catch (NumberFormatException e) {
-            System.out.println("Ошибка: введите число.");
-            return;
-        }
-        if (courierChoice < 0 || courierChoice >= couriers.size()) {
-            System.out.println("Ошибка: неверный номер.");
-            return;
-        }
+        int courierChoice = readIntInRange(
+                "Выберите номер курьера (1-" + couriers.size() + "): ",
+                1, couriers.size());
+        Courier courier = couriers.get(courierChoice - 1);
 
-        Courier courier = couriers.get(courierChoice);
         String error = order.assignCourier(courier);
         if (error != null) {
             System.out.println("Ошибка: " + error);
@@ -210,27 +255,52 @@ public class ConsoleInterface {
             return;
         }
 
-        System.out.println("Выберите новый статус:");
-        System.out.println("1. В пути (IN_TRANSIT)");
-        System.out.println("2. Доставлено (DELIVERED)");
-        System.out.println("3. Отменить заказ (CANCELLED)");
-        System.out.print("Ваш выбор: ");
-        String choice = scanner.nextLine().trim();
+        OrderStatus current = order.getStatus();
+
+        if (current == OrderStatus.DELIVERED) {
+            System.out.println("Заказ уже доставлен. Действия невозможны.");
+            return;
+        }
+        if (current == OrderStatus.CANCELLED) {
+            System.out.println("Заказ отменён. Действия невозможны.");
+            return;
+        }
+
+        boolean canGoInTransit = current == OrderStatus.COURIER_ASSIGNED
+                || (current == OrderStatus.DELIVERY_METHOD_CHOSEN
+                        && order.getDeliveryMethod() != null
+                        && !order.getDeliveryMethod().requiresCourier());
+        boolean canBeDelivered = current == OrderStatus.IN_TRANSIT;
+
+        System.out.println("Текущий статус: " + current);
+        System.out.println("Доступные действия:");
+
+        int optInTransit = -1;
+        int optDelivered = -1;
+        int option = 1;
+
+        if (canGoInTransit) {
+            System.out.println(option + ". Отправить в путь (IN_TRANSIT)");
+            optInTransit = option;
+            option++;
+        }
+        if (canBeDelivered) {
+            System.out.println(option + ". Отметить как доставленный (DELIVERED)");
+            optDelivered = option;
+            option++;
+        }
+        System.out.println(option + ". Отменить заказ (CANCELLED)");
+        int optCancel = option;
+
+        int choice = readIntInRange("Ваш выбор: ", 1, optCancel);
 
         OrderStatus nextStatus;
-        switch (choice) {
-            case "1":
-                nextStatus = OrderStatus.IN_TRANSIT;
-                break;
-            case "2":
-                nextStatus = OrderStatus.DELIVERED;
-                break;
-            case "3":
-                nextStatus = OrderStatus.CANCELLED;
-                break;
-            default:
-                System.out.println("Ошибка: неверный выбор.");
-                return;
+        if (choice == optInTransit) {
+            nextStatus = OrderStatus.IN_TRANSIT;
+        } else if (choice == optDelivered) {
+            nextStatus = OrderStatus.DELIVERED;
+        } else {
+            nextStatus = OrderStatus.CANCELLED;
         }
 
         String error = order.updateStatus(nextStatus);
@@ -256,27 +326,15 @@ public class ConsoleInterface {
         System.out.println("\n--- ВЫБОР ЗАКАЗА ---");
         for (int i = 0; i < orders.size(); i++) {
             Order o = orders.get(i);
-            String status = o.getStatus().toString();
-            String clientName = o.getClient().getName();
-            double cost = o.getTotalCost();
             System.out.printf("%d. Заказ №%d | Клиент: %s | Статус: %s | Сумма: %.2f руб.%n",
-                    (i + 1), o.getId(), clientName, status, cost);
+                    (i + 1), o.getId(), o.getClient().getName(),
+                    o.getStatus(), o.getTotalCost());
         }
 
-        System.out.print("Введите номер заказа из списка (1-" + orders.size() + "): ");
-        int index;
-        try {
-            index = Integer.parseInt(scanner.nextLine().trim()) - 1;
-        } catch (NumberFormatException e) {
-            System.out.println("Ошибка: введите число.");
-            return null;
-        }
+        int index = readIntInRange(
+                "Введите номер заказа (1-" + orders.size() + "): ",
+                1, orders.size());
 
-        if (index < 0 || index >= orders.size()) {
-            System.out.println("Ошибка: неверный номер заказа.");
-            return null;
-        }
-
-        return orders.get(index);
+        return orders.get(index - 1);
     }
 }

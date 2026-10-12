@@ -21,7 +21,7 @@ public class Client {
     }
 
     public static boolean isValidPhone(String phone) {
-        if (phone == null) {
+        if (phone == null || phone.isEmpty()) {
             return false;
         }
 
@@ -30,6 +30,8 @@ public class Client {
             char c = phone.charAt(i);
             if (Character.isDigit(c)) {
                 digitCount++;
+            } else if (c != '+' && c != '-' && c != ' ' && c != '(' && c != ')') {
+                return false;
             }
         }
 

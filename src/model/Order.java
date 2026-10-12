@@ -132,6 +132,10 @@ public class Order {
         return status;
     }
 
+    public DeliveryMethod getDeliveryMethod() {
+        return deliveryMethod;
+    }
+
     public List<OrderItem> getItems() {
         return items;
     }
@@ -144,11 +148,11 @@ public class Order {
 
         return String.format(
                 "Заказ №%d [%s]%n" +
-                "Клиент: %s (%s) | Адрес: %s%n" +
-                "Товары: %s%n" +
-                "Способ доставки: %s%n" +
-                "Курьер: %s%n" +
-                "Стоимость товаров: %.2f руб. | Итого: %.2f руб. (Срок: %d мин.)%n",
+                        "Клиент: %s (%s) | Адрес: %s%n" +
+                        "Товары: %s%n" +
+                        "Способ доставки: %s%n" +
+                        "Курьер: %s%n" +
+                        "Стоимость товаров: %.2f руб. | Итого: %.2f руб. (Срок: %d мин.)%n",
                 id, status,
                 client.getName(), client.getPhone(), deliveryAddress,
                 items, methodName, courierName,
