@@ -69,13 +69,18 @@ public class ConsoleInterface {
     }
 
     private String readValidPhone(String prompt) {
+        System.out.println("Допустимые форматы телефона:");
+        System.out.println("  +7(XXX)XXX-XX-XX - например, +7(921)123-45-67");
+        System.out.println("  +7XXXXXXXXXX     - например, +79211234567");
+        System.out.println("  8XXXXXXXXXX      - например, 89211234567");
+
         while (true) {
             System.out.print(prompt);
             String value = scanner.nextLine().trim();
             if (Client.isValidPhone(value)) {
                 return value;
             }
-            System.out.println("Ошибка: неверный формат телефона (10-12 цифр, допустимы +, -, пробел, скобки).");
+            System.out.println("Ошибка: неверный формат телефона. Попробуйте снова.");
         }
     }
 
@@ -111,7 +116,7 @@ public class ConsoleInterface {
 
     private void createOrder() {
         String name = readNonEmptyString("Введите имя клиента: ");
-        String phone = readValidPhone("Введите телефон (10-12 цифр): ");
+        String phone = readValidPhone("Введите телефон: ");
         String address = readNonEmptyString("Введите адрес доставки: ");
 
         Client client = new Client(name, phone);

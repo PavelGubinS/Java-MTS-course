@@ -24,17 +24,7 @@ public class Client {
         if (phone == null || phone.isEmpty()) {
             return false;
         }
-
-        int digitCount = 0;
-        for (int i = 0; i < phone.length(); i++) {
-            char c = phone.charAt(i);
-            if (Character.isDigit(c)) {
-                digitCount++;
-            } else if (c != '+' && c != '-' && c != ' ' && c != '(' && c != ')') {
-                return false;
-            }
-        }
-
-        return digitCount >= 10 && digitCount <= 12;
+        String clean = phone.replaceAll("[\\s\\-()]", "");
+        return clean.matches("\\+?[78]\\d{10}");
     }
 }
