@@ -69,15 +69,18 @@ public class ConsoleInterface {
     }
 
     private String readValidPhone(String prompt) {
+        System.out.println("Допустимые форматы телефона:");
+        System.out.println("  +7(XXX)XXX-XX-XX - например, +7(921)123-45-67");
+        System.out.println("  +7XXXXXXXXXX     - например, +79211234567");
+        System.out.println("  8XXXXXXXXXX      - например, 89211234567");
+
         while (true) {
             System.out.print(prompt);
             String value = scanner.nextLine().trim();
             if (Client.isValidPhone(value)) {
                 return value;
             }
-            System.out.println("Ошибка: неверный формат телефона.");
-            System.out.println("Допустимые форматы: +7(XXX)XXX-XX-XX, +7XXXXXXXXXX, 8XXXXXXXXXX");
-            System.out.println("Примеры: +7(921)123-45-67, +79211234567, 89211234567");
+            System.out.println("Ошибка: неверный формат телефона. Попробуйте снова.");
         }
     }
 
